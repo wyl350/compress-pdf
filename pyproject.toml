@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compress-pdf"
+version = "1.0.0"
+description = "PDF 压缩工具"
+requires-python = ">=3.8"
+dependencies = [
+    "Pillow",
+    "img2pdf",
+    "pdf2image",
+]
+
+[tool.setuptools]
+py-modules = ["compress_pdf"]
+
+[project.scripts]
+compress-pdf = "compress_pdf:main"

@@ -1,0 +1,56 @@
+---
+- name: Install system dependencies
+  ansible.builtin.apt:
+    name:
+      - poppler-utils
+    state: present
+    update_cache: true
+  become: true
+  when: compress_pdf_state == "present"
+
+- name: Check if uv is installed
+  ansible.builtin.command: which uv
+  register: uv_check
+  changed_when: false
+  failed_when: false
+  when: compress_pdf_state == "present"
+
+- name: Install uv
+  ansible.builtin.shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  when:
+    - compress_pdf_state == "present"
+    - uv_check.rc != 0
+  changed_when: true
+
+- name: Ensure install directory exists
+  ansible.builtin.file:
+    path: "{{ compress_pdf_install_dir }}"
+    state: directory
+    mode: "0755"
+  when: compress_pdf_state == "present"
+
+- name: Clone compress-pdf repository
+  ansible.builtin.git:
+    repo: "{{ compress_pdf_repo }}"
+    dest: "{{ compress_pdf_install_dir }}"
+    force: true
+  when: compress_pdf_state == "present"
+
+- name: Install compress-pdf globally with uv
+  ansible.builtin.command: uv tool install .
+  args:
+    chdir: "{{ compress_pdf_install_dir }}"
+  when: compress_pdf_state == "present"
+
+- name: Uninstall compress-pdf globally
+  ansible.builtin.command: uv tool uninstall compress-pdf
+  register: uninstall_result
+  changed_when: uninstall_result.rc == 0
+  failed_when: false
+  when: compress_pdf_state == "absent"
+
+- name: Remove install directory
+  ansible.builtin.file:
+    path: "{{ compress_pdf_install_dir }}"
+    state: absent
+  when: compress_pdf_state == "absent"
