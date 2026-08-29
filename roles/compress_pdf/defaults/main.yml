@@ -1,4 +1,0 @@
----
-compress_pdf_repo: "https://github.com/wyl350/compress-pdf.git"
-compress_pdf_install_dir: "/opt/compress-pdf"
-compress_pdf_state: present

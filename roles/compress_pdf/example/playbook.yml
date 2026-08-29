@@ -1,7 +1,0 @@
----
-- name: Install compress-pdf
-  hosts: localhost
-  connection: local
-  become: true
-  roles:
-    - compress_pdf
