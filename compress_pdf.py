@@ -10,6 +10,7 @@
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -169,10 +170,13 @@ raster 级别:
   %(prog)s -m vector -l 3 input.pdf           vector 模式 ebook
   %(prog)s -m raster -l 5 input.pdf           raster 模式极致压缩
   %(prog)s -m vector -l 3 .                   批量压缩当前目录
+  %(prog)s --in-place -l 3 ./docs/            递归压缩 docs 并原地覆盖（含嵌套目录）
 """,
     )
     parser.add_argument("input", help="PDF 文件或目录")
     parser.add_argument("-o", "--output", help="输出路径（文件或目录）")
+    parser.add_argument("--in-place", action="store_true",
+                        help="直接覆盖原文件（与 -o 互斥，目录模式下递归覆盖所有 PDF）")
     parser.add_argument("-m", "--mode", choices=["vector", "raster"], default="vector",
                         help="压缩模式: vector（推荐）或 raster（默认: vector）")
     parser.add_argument("-l", "--level", type=int, default=5,
@@ -208,6 +212,9 @@ def main():
 
     input_arg = Path(args.input)
 
+    if args.in_place and args.output:
+        parser.error("--in-place 与 -o 不能同时使用")
+
     if input_arg.is_file() and input_arg.suffix.lower() == ".pdf":
         pdf_files = [input_arg]
         if args.output:
@@ -217,6 +224,8 @@ def main():
             else:
                 output_arg.mkdir(parents=True, exist_ok=True)
                 outputs = [output_arg / input_arg.name]
+        elif args.in_place:
+            outputs = [input_arg]
         else:
             outputs = [input_arg.parent / f"{input_arg.stem}_compressed{input_arg.suffix}"]
     elif input_arg.is_dir():
@@ -224,12 +233,14 @@ def main():
         if not pdf_files:
             print(f"未找到 PDF 文件：{input_arg}")
             sys.exit(1)
-        if args.output:
-            output_dir = Path(args.output)
+        if args.in_place:
+            outputs = [pdf for pdf in pdf_files]
         else:
-            output_dir = input_arg.parent / f"{input_arg.name}_compressed"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        outputs = [output_dir / pdf.name for pdf in pdf_files]
+            if args.output:
+                output_dir = Path(args.output)
+            else:
+                output_dir = input_arg.parent / f"{input_arg.name}_compressed"
+            outputs = [output_dir / pdf.relative_to(input_arg) for pdf in pdf_files]
     else:
         print(f"无效的输入：{input_arg}")
         sys.exit(1)
@@ -244,11 +255,26 @@ def main():
     saved_count = 0
 
     for pdf_file, output_file in zip(pdf_files, outputs):
+        tmp_path = None
         try:
-            if args.mode == "vector":
-                result = compress_vector(pdf_file, output_file, pdfsettings, gs_dpi)
+            if output_file == pdf_file:
+                fd, tmp_name = tempfile.mkstemp(dir=pdf_file.parent, suffix=".tmp.pdf")
+                os.close(fd)
+                tmp_path = Path(tmp_name)
+                actual_out = tmp_path
             else:
-                result = compress_raster(pdf_file, output_file, dpi, quality)
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                actual_out = output_file
+
+            if args.mode == "vector":
+                result = compress_vector(pdf_file, actual_out, pdfsettings, gs_dpi)
+            else:
+                result = compress_raster(pdf_file, actual_out, dpi, quality)
+
+            if tmp_path is not None and not result.get("error"):
+                os.replace(tmp_path, pdf_file)
+                tmp_path = None
+                result["compressed"] = pdf_file.stat().st_size
 
             total_original += result["original"]
             total_compressed += result["compressed"]
@@ -271,6 +297,9 @@ def main():
                 )
         except Exception as e:
             print(f"{pdf_file.name:<45} 错误：{e}")
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                tmp_path.unlink()
 
     if len(pdf_files) > 1:
         total_ratio = (1 - total_compressed / total_original) * 100 if total_original > 0 else 0

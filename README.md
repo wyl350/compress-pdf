@@ -53,10 +53,13 @@ uv pip install Pillow img2pdf pdf2image
 # 压缩单个文件
 compress-pdf file.pdf
 
-# 压缩整个目录
+# 压缩整个目录（递归所有嵌套子目录）
 compress-pdf /path/to/pdfs/
 
-# 指定输出路径
+# 递归压缩并原地覆盖原文件（同名替换，保留目录结构）
+compress-pdf --in-place /path/to/pdfs/
+
+# 指定输出路径（目录模式下镜像原目录结构）
 compress-pdf file.pdf -o compressed.pdf
 compress-pdf ./pdfs/ -o ./output/
 
@@ -66,6 +69,9 @@ compress-pdf -l 3 file.pdf
 # 自定义参数
 compress-pdf --dpi 80 --quality 60 file.pdf
 ```
+
+> `--in-place` 直接覆盖原文件，压缩失败时原文件不受影响；与 `-o` 互斥。
+> 目录模式默认输出到 `<目录名>_compressed`，使用 `-o` 时同样保留嵌套目录结构。
 
 ## 压缩级别
 
